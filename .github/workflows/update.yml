@@ -1,0 +1,75 @@
+name: Update HK List
+
+on:
+  schedule:
+    # 北京时间每天 11:00（UTC 03:00）
+    - cron: "0 3 * * *"
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-hk
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download source file
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          curl --fail \
+               --location \
+               --retry 5 \
+               --retry-delay 5 \
+               --connect-timeout 10 \
+               --max-time 120 \
+               https://zip.cm.edu.kg/all.txt \
+               -o all.txt
+
+          test -s all.txt
+
+      - name: Generate HK.txt
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          grep -E '#HK$' all.txt \
+            | sort -u \
+            > HK.txt.tmp
+
+          mv HK.txt.tmp HK.txt
+
+      - name: Show statistics
+        run: |
+          echo "HK Count: $(wc -l < HK.txt)"
+          echo
+          echo "First 20 lines:"
+          head -20 HK.txt
+
+      - name: Commit and Push
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "114503729+MRLQ@users.noreply.github.com"
+
+          git add HK.txt
+
+          if git diff --cached --quiet; then
+              echo "No changes."
+              exit 0
+          fi
+
+          git commit -m "Update HK list ($(date -u '+%Y-%m-%d %H:%M UTC'))"
+          git push
